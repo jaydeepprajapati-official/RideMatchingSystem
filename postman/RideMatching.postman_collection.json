@@ -1,0 +1,142 @@
+{
+  "info": {
+    "name": "RideMatchingSystem",
+    "_postman_id": "ride-matching-collection",
+    "description": "Collection with HTTP requests and WebSocket/SignalR guidance for RideMatchingSystem",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:5001",
+      "type": "string"
+    },
+    {
+      "key": "wsUrl",
+      "value": "wss://localhost:5001",
+      "type": "string"
+    },
+    {
+      "key": "driverId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rideId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Driver",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Alice\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/v1/drivers"
+      },
+      "response": []
+    },
+    {
+      "name": "Driver Go Online",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/drivers/{{driverId}}/online"
+      }
+    },
+    {
+      "name": "Update Driver Location",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 20.0,\n  \"longitude\": 73.0\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/drivers/{{driverId}}/location"
+      }
+    },
+    {
+      "name": "Create Ride",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"riderId\": \"rider-1\",\n  \"pickupLatitude\": 20.0,\n  \"pickupLongitude\": 73.0,\n  \"destinationLatitude\": 20.1,\n  \"destinationLongitude\": 73.1\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/rides"
+      }
+    },
+    {
+      "name": "Get Ride",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/rides/{{rideId}}"
+      }
+    },
+    {
+      "name": "Driver Accept",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"driverId\": \"{{driverId}}\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{baseUrl}}/api/v1/drivers/{{rideId}}/accept"
+      }
+    },
+    {
+      "name": "SignalR WebSocket - Connect and Join",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{wsUrl}}/hubs/rides",
+        "description": "Instructions: open a WebSocket connection to {{wsUrl}}/hubs/rides in Postman's WebSocket tab. After connecting, send the SignalR handshake and then invoke JoinRide or JoinDriver. Example messages are provided in the "messageExamples" field below."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Postman does not automate SignalR protocol for WebSocket requests; use the WebSocket tab to send messages manually.",
+              "// See messageExamples in collection description."
+            ]
+          }
+        }
+      ],
+      "_postman_isSubFolder": false,
+      "messageExamples": {
+        "handshake": "{\"protocol\":\"json\",\"version\":1}",
+        "joinRide": "{\"type\":1,\"target\":\"JoinRide\",\"arguments\":[\"{{rideId}}\"]}",
+        "joinDriver": "{\"type\":1,\"target\":\"JoinDriver\",\"arguments\":[\"{{driverId}}\"]}",
+        "note": "After sending the handshake, the server responds with an empty object; then you can send invocation messages. Server-sent events will arrive as JSON messages (type=1 invocations)."
+      }
+    }
+  ]
+}
