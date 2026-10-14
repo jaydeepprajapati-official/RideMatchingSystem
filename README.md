@@ -37,6 +37,141 @@ Architecture notes:
 - Concurrency is handled using small, atomic database ExecuteUpdateAsync statements and database transactions to reserve drivers and mark rides.
 - SignalR is used to notify ride and driver groups of changes (RideMatched, RideAssigned, RideStatusChanged).
 
+Sequence diagrams (ride & driver flow)
+-------------------------------------
+Below are Mermaid sequence diagrams (GitHub supports rendering Mermaid in README) and an ASCII fallback you can view in any text editor.
+
+Ride request & matching flow (Mermaid):
+
+```mermaid
+sequenceDiagram
+	participant Rider
+	participant API
+	participant DB
+	participant Worker
+	participant Driver
+	participant SignalR
+
+	Rider->>API: POST /api/v1/rides (create)
+	API->>DB: Insert Ride + MatchingJob
+	DB-->>API: 201/202 Accepted (rideId)
+	Note over Worker,DB: Periodic worker polls Pending MatchingJobs
+	Worker->>DB: Claim MatchingJob (atomic update)
+	Worker->>DB: Query available drivers (fresh locations)
+	Worker->>DB: Reserve driver (transactional)
+	Worker->>DB: Assign ride (set DriverId, DriverAssigned)
+	Worker->>SignalR: Notify ride:{rideId} and driver:{driverId}
+	SignalR-->>Driver: RideAssigned
+	Driver->>API: POST /drivers/{rideId}/accept
+	API->>DB: Update ride status to Accepted
+	API->>SignalR: Notify ride:{rideId} of status change
+```
+
+Driver lifecycle flow (Mermaid):
+
+```mermaid
+sequenceDiagram
+	participant Driver
+	participant API
+	participant DB
+	participant Worker
+	participant SignalR
+
+	Driver->>API: POST /api/v1/drivers (create)
+	API->>DB: Insert Driver
+	Driver->>API: POST /drivers/{id}/online
+	Driver->>API: PUT /drivers/{id}/location (periodic)
+	Note over Worker,DB: Worker selects drivers with IsOnline && IsAvailable
+	Worker->>DB: Reserve driver and assign ride
+	Worker->>SignalR: Send RideAssigned to driver:{id}
+	SignalR-->>Driver: RideAssigned
+	Driver->>API: Accept / Start / Complete endpoints
+	API->>DB: Update ride and driver states
+	API->>SignalR: Publish RideStatusChanged
+```
+
+ASCII fallback - Ride flow:
+
+Rider -> API (create ride)
+API -> DB (insert Ride + MatchingJob)
+Worker -> DB (claim job)
+Worker -> DB (find & reserve driver)
+Worker -> DB (assign ride)
+Worker -> SignalR (notify ride and driver groups)
+Driver -> API (accept/start/complete)
+
+ASCII fallback - Driver flow:
+
+Driver -> API (create)
+Driver -> API (go online)
+Driver -> API (update location - periodic)
+Worker -> DB (reserve & assign)
+Worker -> SignalR (notify driver)
+Driver -> API (accept/start/complete)
+
+System architecture flow
+------------------------
+The following describes the logical components, deployment roles, and data flows for the system.
+
+Mermaid component diagram (logical):
+
+```mermaid
+graph TD
+  subgraph Client
+	RiderApp["Rider App"]
+	DriverApp["Driver App"]
+  end
+
+  subgraph APIService["RideMatching.Api"]
+	API["REST API (Controllers)"]
+	Hub["SignalR Hub"]
+	Worker["Background Worker"]
+  end
+
+  DB["SQL Server"]
+  Cache["Redis - optional"]
+  Broker["Message Broker - optional"]
+  Observability["Logging / Tracing / Metrics"]
+
+  RiderApp -->|HTTP| API
+  DriverApp -->|HTTP| API
+  RiderApp -->|SignalR| Hub
+  DriverApp -->|SignalR| Hub
+
+  API -->|EF Core| DB
+  Worker -->|EF Core| DB
+  Worker -->|SignalR| Hub
+
+  API -->|Publish events| Broker
+  Worker -->|Consume/Publish| Broker
+  API -->|Cache reads/writes| Cache
+  Worker -->|Cache reads/writes| Cache
+
+  API --> Observability
+  Worker --> Observability
+  DB --> Observability
+
+  classDef infra fill:#f9f,stroke:#333,stroke-width:1px;
+  class DB,Broker,Cache,Observability infra;
+```
+
+ASCII fallback (logical flow):
+
+Clients (Rider/Driver) communicate with the REST API and connect to SignalR for realtime notifications. The API persists domain state in SQL Server (via EF Core). A Background Worker processes MatchingJobs, performs transactional reserves/assignments and uses SignalR to notify clients.
+
+Deployment notes:
+- APIService hosts REST endpoints, SignalR hub, and (for MVP) the background worker. In production, split the Worker into a separate service or container to scale independently.
+- Database is a single primary SQL Server instance (or managed DB) with read replicas for scaling reads and a separate spatial index or geospatial store for proximity queries.
+- Use a message broker (Kafka/RabbitMQ/Azure Service Bus) to decouple RideRequested and DriverStatus events between services when scaling to microservices.
+- Use Redis (geospatial index) for high-frequency location updates and proximity searches.
+
+Security and operational considerations:
+- Terminate TLS at ingress/load balancer.
+- Protect SignalR hubs and API endpoints with authentication (JWT/OAuth).
+- Add health checks and metrics endpoints; use centralized logging and tracing.
+
+
+
 OOP, SOLID and Design Patterns
 ------------------------------
 - OOP concepts used:
