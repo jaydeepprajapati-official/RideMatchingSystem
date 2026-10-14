@@ -131,6 +131,9 @@ public class RidesController : ControllerBase
             RideId = ride.Id
         };
 
+        await using var transaction =
+            await _db.Database.BeginTransactionAsync(cancellationToken);
+
         _db.Rides.Add(ride);
         _db.MatchingJobs.Add(job);
 
