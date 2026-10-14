@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RideMatching.Api/RideMatching.Api.csproj" Id="956dc1df-cc5b-4878-a080-ef50c1b2143b" />
+  <Project Path="RideMatching.Tests/RideMatching.Tests.csproj" />
+</Solution>
